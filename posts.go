@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -17,20 +18,8 @@ type Post struct {
 }
 
 func postsIndexHandler() http.Handler {
-	var once sync.Once
-	var initerr error
-	var tmpl *template.Template
-	var stmt *sql.Stmt
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		once.Do(func() {
-			stmt, initerr = getDB().PrepareContext(ctx, `
-SELECT id, title, content FROM posts`)
-			if initerr != nil {
-				return
-			}
-			tmpl, initerr = getTemplate().New("index").Parse(`<!DOCTYPE html>
+	const query = "SELECT id, title, content FROM posts"
+	const view = `<!DOCTYPE html>
 <html>
 <head>
 	<title>Blog</title>
@@ -42,13 +31,30 @@ SELECT id, title, content FROM posts`)
 	{{end}}
 	<a href="/posts/new">New Post</a>
 </body>
-</html>`)
+</html>`
+
+	var (
+		once    sync.Once
+		initerr error
+		stmt    *sql.Stmt
+		tmpl    *template.Template
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		// Initialization: Prepare database query and parse html template only once
+		once.Do(func() {
+			var stmterr, tmplerr error
+			stmt, stmterr = getDB().PrepareContext(ctx, query)
+			tmpl, tmplerr = getTemplate().New("index").Parse(view)
+			initerr = errors.Join(stmterr, tmplerr)
 		})
 		if initerr != nil {
 			http.Error(w, "Failed to initialize handler: "+initerr.Error(), http.StatusInternalServerError)
 			return
 		}
 
+		// Run database query
 		rows, err := stmt.QueryContext(ctx)
 		if err != nil {
 			http.Error(w, "Failed to fetch posts: "+err.Error(), http.StatusInternalServerError)
@@ -56,6 +62,7 @@ SELECT id, title, content FROM posts`)
 		}
 		defer rows.Close()
 
+		// Parse database results
 		var posts []Post
 		for rows.Next() {
 			var post Post
@@ -65,25 +72,15 @@ SELECT id, title, content FROM posts`)
 			}
 			posts = append(posts, post)
 		}
+
+		// Render the html view template
 		tmpl.Execute(w, posts)
 	})
 }
 
 func postsShowHandler() http.Handler {
-	var once sync.Once
-	var initerr error
-	var tmpl *template.Template
-	var stmt *sql.Stmt
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		once.Do(func() {
-			stmt, initerr = getDB().PrepareContext(ctx, `
-SELECT id, title, content FROM posts WHERE id = ?`)
-			if initerr != nil {
-				return
-			}
-			tmpl, initerr = template.New("show").Parse(`<!DOCTYPE html>
+	const query = "SELECT id, title, content FROM posts WHERE id = ?"
+	const view = `<!DOCTYPE html>
 <html>
 <head>
     <title>{{.Title}}</title>
@@ -97,19 +94,37 @@ SELECT id, title, content FROM posts WHERE id = ?`)
 			<button type="submit">Destroy this Post</button>
 		</form>
 </body>
-</html>`)
+</html>`
+
+	var (
+		once    sync.Once
+		initerr error
+		stmt    *sql.Stmt
+		tmpl    *template.Template
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		// Initialization: Prepare database query and parse html template only once
+		once.Do(func() {
+			var stmterr, tmplerr error
+			stmt, stmterr = getDB().PrepareContext(ctx, query)
+			tmpl, tmplerr = getTemplate().New("show").Parse(view)
+			initerr = errors.Join(stmterr, tmplerr)
 		})
 		if initerr != nil {
 			http.Error(w, "Failed to initialize handler: "+initerr.Error(), http.StatusInternalServerError)
 			return
 		}
 
+		// Get the id from the path value
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.Error(w, "Invalid post ID", http.StatusBadRequest)
 			return
 		}
 
+		// Run database query
 		row := stmt.QueryRowContext(ctx, id)
 		var post Post
 		if err := row.Scan(&post.ID, &post.Title, &post.Content); err != nil {
@@ -120,18 +135,14 @@ SELECT id, title, content FROM posts WHERE id = ?`)
 			}
 			return
 		}
+
+		// Render the html view template
 		tmpl.Execute(w, post)
 	})
 }
 
 func postsNewHandler() http.Handler {
-	var once sync.Once
-	var initerr error
-	var tmpl *template.Template
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		once.Do(func() {
-			tmpl, initerr = getTemplate().New("new").Parse(`<!DOCTYPE html>
+	const view = `<!DOCTYPE html>
 <html>
 <head>
     <title>New Post</title>
@@ -147,7 +158,16 @@ func postsNewHandler() http.Handler {
     </form>
     <a href="/posts">Back to Posts</a>
 </body>
-</html>`)
+</html>`
+
+	var (
+		once    sync.Once
+		initerr error
+		tmpl    *template.Template
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		once.Do(func() {
+			tmpl, initerr = getTemplate().New("new").Parse(view)
 		})
 		if initerr != nil {
 			http.Error(w, "Failed to initialize handler: "+initerr.Error(), http.StatusInternalServerError)
@@ -159,20 +179,8 @@ func postsNewHandler() http.Handler {
 }
 
 func postsEditHandler() http.Handler {
-	var once sync.Once
-	var initerr error
-	var tmpl *template.Template
-	var stmt *sql.Stmt
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		once.Do(func() {
-			stmt, initerr = getDB().PrepareContext(ctx, `
-SELECT id, title, content FROM posts WHERE id = ?`)
-			if initerr != nil {
-				return
-			}
-			tmpl, initerr = getTemplate().New("edit").Parse(`<!DOCTYPE html>
+	const query = "SELECT id, title, content FROM posts WHERE id = ?"
+	const view = `<!DOCTYPE html>
 <html>
 <head>
     <title>Edit Post</title>
@@ -189,7 +197,22 @@ SELECT id, title, content FROM posts WHERE id = ?`)
     <p><a href="/posts/{{.ID}}">Show this Post</a></p>
     <p><a href="/posts">Back to Posts</a></p>
 </body>
-</html>`)
+</html>`
+
+	var (
+		once    sync.Once
+		initerr error
+		stmt    *sql.Stmt
+		tmpl    *template.Template
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		once.Do(func() {
+			var stmterr, tmplerr error
+			stmt, stmterr = getDB().PrepareContext(ctx, query)
+			tmpl, tmplerr = getTemplate().New("edit").Parse(view)
+			initerr = errors.Join(stmterr, tmplerr)
 		})
 		if initerr != nil {
 			http.Error(w, "Failed to initialize handler: "+initerr.Error(), http.StatusInternalServerError)
@@ -212,20 +235,23 @@ SELECT id, title, content FROM posts WHERE id = ?`)
 			}
 			return
 		}
+
 		tmpl.Execute(w, post)
 	})
 }
 
 func postsCreateHandler() http.Handler {
-	var once sync.Once
-	var stmt *sql.Stmt
-	var initerr error
-
+	const query = "INSERT INTO posts (title, content) VALUES (?, ?)"
+	var (
+		once    sync.Once
+		initerr error
+		stmt    *sql.Stmt
+	)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+
 		once.Do(func() {
-			stmt, initerr = getDB().PrepareContext(ctx, `
-INSERT INTO posts (title, content) VALUES (?, ?)`)
+			stmt, initerr = getDB().PrepareContext(ctx, query)
 		})
 		if initerr != nil {
 			http.Error(w, "Failed to initialize handler: "+initerr.Error(), http.StatusInternalServerError)
@@ -251,15 +277,16 @@ INSERT INTO posts (title, content) VALUES (?, ?)`)
 }
 
 func postsUpdateHandler() http.Handler {
-	var once sync.Once
-	var stmt *sql.Stmt
-	var initerr error
-
+	const query = "UPDATE posts SET title = ?, content = ? WHERE id = ?"
+	var (
+		once    sync.Once
+		initerr error
+		stmt    *sql.Stmt
+	)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		once.Do(func() {
-			stmt, initerr = getDB().PrepareContext(ctx, `
-UPDATE posts SET title = ?, content = ? WHERE id = ?`)
+			stmt, initerr = getDB().PrepareContext(ctx, query)
 		})
 		if initerr != nil {
 			http.Error(w, "Failed to initialize handler: "+initerr.Error(), http.StatusInternalServerError)
@@ -279,20 +306,23 @@ UPDATE posts SET title = ?, content = ? WHERE id = ?`)
 			http.Error(w, "Failed to update post", http.StatusInternalServerError)
 			return
 		}
+
 		http.Redirect(w, r, fmt.Sprintf("/posts/%d", id), http.StatusSeeOther)
 	})
 }
 
 func postsDestroyHandler() http.Handler {
-	var once sync.Once
-	var stmt *sql.Stmt
-	var initerr error
-
+	const query = "DELETE FROM posts WHERE id = ?"
+	var (
+		once    sync.Once
+		initerr error
+		stmt    *sql.Stmt
+	)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+
 		once.Do(func() {
-			stmt, initerr = getDB().PrepareContext(ctx, `
-DELETE FROM posts WHERE id = ?`)
+			stmt, initerr = getDB().PrepareContext(ctx, query)
 		})
 		if initerr != nil {
 			http.Error(w, "Failed to initialize handler: "+initerr.Error(), http.StatusInternalServerError)
