@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{.Title}}</title>
+</head>
+<body>
+    <h1>{{.Title}}</h1>
+    <p>{{.Content}}</p>
+    <p><a href="/posts/{{.ID}}/edit">Edit this Post</a></p>
+    <p><a href="/posts">Back to Posts</a></p>
+		<form action="/posts/{{.ID}}/destroy" method="post">
+			<button type="submit">Destroy this Post</button>
+		</form>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Post</title>
+</head>
+<body>
+    <h1>Edit Post</h1>
+    <form action="/posts/{{.ID}}" method="post">
+        <label for="title">Title:</label><br>
+        <input type="text" id="title" name="title" value="{{.Title}}"><br>
+        <label for="content">Content:</label><br>
+        <textarea id="content" name="content">{{.Content}}</textarea><br>
+        <button type="submit">Update Post</button>
+    </form>
+    <p><a href="/posts/{{.ID}}">Show this Post</a></p>
+    <p><a href="/posts">Back to Posts</a></p>
+</body>
+</html>

@@ -3,42 +3,49 @@ package main
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"flag"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 	"time"
+
+	"github.com/jpschroeder/sampleblog/posts"
+	"github.com/jpschroeder/sampleblog/queries"
+	"github.com/jpschroeder/sampleblog/util"
+	_ "github.com/mattn/go-sqlite3"
 )
 
-func routes() http.Handler {
+//go:embed **/*.html
+var htmlTemplates embed.FS
+
+func routes(queries *queries.Queries, templates util.TemplateParser) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/posts", http.StatusFound)
 	}))
-	mux.Handle("GET /posts", postsIndexHandler())
-	mux.Handle("GET /posts/{id}", postsShowHandler())
-	mux.Handle("GET /posts/new", postsNewHandler())
-	mux.Handle("GET /posts/{id}/edit", postsEditHandler())
-	mux.Handle("POST /posts", postsCreateHandler())
-	mux.Handle("POST /posts/{id}", postsUpdateHandler())
-	mux.Handle("POST /posts/{id}/destroy", postsDestroyHandler())
+	postsController := posts.NewPostsController(queries, templates)
+	mux.HandleFunc("GET /posts", postsController.Index)
+	mux.HandleFunc("GET /posts/{id}", util.WithID(postsController.Show))
+	mux.HandleFunc("GET /posts/new", postsController.New)
+	mux.HandleFunc("GET /posts/{id}/edit", util.WithID(postsController.Edit))
+	mux.HandleFunc("POST /posts", postsController.Create)
+	mux.HandleFunc("POST /posts/{id}", util.WithID(postsController.Update))
+	mux.HandleFunc("POST /posts/{id}/destroy", util.WithID(postsController.Destroy))
 
 	var handler http.Handler = mux
 	// Add middleware
 	return handler
 }
 
+//go:embed schema.sql
+var ddl string
+
 func schema(db *sql.DB, ctx context.Context) error {
-	_, err := db.ExecContext(ctx, `
-CREATE TABLE IF NOT EXISTS posts (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	title TEXT NOT NULL,
-	content TEXT NOT NULL
-)`)
+	_, err := db.ExecContext(ctx, ddl)
 	return err
 }
 
@@ -55,7 +62,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	db, err := initDB(*dbFile)
+	db, err := sql.Open("sqlite3", *dbFile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -66,7 +73,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	handler := routes()
+	queries := queries.New(db)
+	templates := util.NewHTMLTemplateParser(htmlTemplates)
+
+	handler := routes(queries, templates)
 	httpServer := &http.Server{Addr: *httpaddr, Handler: handler}
 
 	go func() {
