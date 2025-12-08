@@ -27,7 +27,7 @@ func routes(queries *queries.Queries, templates util.TemplateParser) http.Handle
 	mux.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/posts", http.StatusFound)
 	}))
-	postsController := posts.NewPostsController(queries, templates)
+	postsController := posts.NewController(queries, templates)
 	mux.HandleFunc("GET /posts", postsController.Index)
 	mux.HandleFunc("GET /posts/{id}", util.WithID(postsController.Show))
 	mux.HandleFunc("GET /posts/new", postsController.New)

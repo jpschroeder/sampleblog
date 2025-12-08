@@ -9,17 +9,17 @@ import (
 	"github.com/jpschroeder/sampleblog/util"
 )
 
-type PostsController struct {
-	queries        *queries.Queries
+type Controller struct {
+	querier        queries.Querier
 	index_template util.Template
 	show_template  util.Template
 	new_template   util.Template
 	edit_template  util.Template
 }
 
-func NewPostsController(queries *queries.Queries, templates util.TemplateParser) *PostsController {
-	return &PostsController{
-		queries:        queries,
+func NewController(querier queries.Querier, templates util.TemplateParser) *Controller {
+	return &Controller{
+		querier:        querier,
 		index_template: templates.ParseFiles("posts/post_index.html"),
 		show_template:  templates.ParseFiles("posts/post_show.html"),
 		new_template:   templates.ParseFiles("posts/post_new.html"),
@@ -27,8 +27,8 @@ func NewPostsController(queries *queries.Queries, templates util.TemplateParser)
 	}
 }
 
-func (c *PostsController) Index(w http.ResponseWriter, r *http.Request) {
-	posts, err := c.queries.ListPosts(r.Context())
+func (c *Controller) Index(w http.ResponseWriter, r *http.Request) {
+	posts, err := c.querier.ListPosts(r.Context())
 	if err != nil {
 		http.Error(w, "Failed to fetch posts: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -36,8 +36,8 @@ func (c *PostsController) Index(w http.ResponseWriter, r *http.Request) {
 	c.index_template.Execute(w, posts)
 }
 
-func (c *PostsController) Show(w http.ResponseWriter, r *http.Request, id int64) {
-	post, err := c.queries.GetPost(r.Context(), id)
+func (c *Controller) Show(w http.ResponseWriter, r *http.Request, id int64) {
+	post, err := c.querier.GetPost(r.Context(), id)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
 		return
@@ -49,12 +49,12 @@ func (c *PostsController) Show(w http.ResponseWriter, r *http.Request, id int64)
 	c.show_template.Execute(w, post)
 }
 
-func (c *PostsController) New(w http.ResponseWriter, r *http.Request) {
+func (c *Controller) New(w http.ResponseWriter, r *http.Request) {
 	c.new_template.Execute(w, nil)
 }
 
-func (c *PostsController) Edit(w http.ResponseWriter, r *http.Request, id int64) {
-	post, err := c.queries.GetPost(r.Context(), id)
+func (c *Controller) Edit(w http.ResponseWriter, r *http.Request, id int64) {
+	post, err := c.querier.GetPost(r.Context(), id)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
 		return
@@ -66,8 +66,8 @@ func (c *PostsController) Edit(w http.ResponseWriter, r *http.Request, id int64)
 	c.edit_template.Execute(w, post)
 }
 
-func (c *PostsController) Create(w http.ResponseWriter, r *http.Request) {
-	post, err := c.queries.CreatePost(r.Context(), queries.CreatePostParams{
+func (c *Controller) Create(w http.ResponseWriter, r *http.Request) {
+	post, err := c.querier.CreatePost(r.Context(), queries.CreatePostParams{
 		Title:   r.FormValue("title"),
 		Content: r.FormValue("content"),
 	})
@@ -78,8 +78,8 @@ func (c *PostsController) Create(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/posts/%d", post.ID), http.StatusSeeOther)
 }
 
-func (c *PostsController) Update(w http.ResponseWriter, r *http.Request, id int64) {
-	err := c.queries.UpdatePost(r.Context(), queries.UpdatePostParams{
+func (c *Controller) Update(w http.ResponseWriter, r *http.Request, id int64) {
+	err := c.querier.UpdatePost(r.Context(), queries.UpdatePostParams{
 		Title:   r.FormValue("title"),
 		Content: r.FormValue("content"),
 		ID:      id,
@@ -91,8 +91,8 @@ func (c *PostsController) Update(w http.ResponseWriter, r *http.Request, id int6
 	http.Redirect(w, r, fmt.Sprintf("/posts/%d", id), http.StatusSeeOther)
 }
 
-func (c *PostsController) Destroy(w http.ResponseWriter, r *http.Request, id int64) {
-	err := c.queries.DeletePost(r.Context(), id)
+func (c *Controller) Destroy(w http.ResponseWriter, r *http.Request, id int64) {
+	err := c.querier.DeletePost(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Failed to delete post", http.StatusInternalServerError)
 		return

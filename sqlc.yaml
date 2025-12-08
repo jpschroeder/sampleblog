@@ -1,10 +1,12 @@
 version: "2"
 sql:
   - engine: "sqlite"
-    queries: "queries.sql"
+    queries: 
+      - "posts/post_queries.sql"
     schema: "schema.sql"
     gen:
       go:
         package: "queries"
         out: "queries"
+        emit_interface: true
 
